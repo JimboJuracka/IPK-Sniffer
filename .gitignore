@@ -1,3 +1,10 @@
+#vscode
+.vscode
+
+#other
+ipk-sniffer
+*.exe
+
 # Prerequisites
 *.d
 
