@@ -13,5 +13,6 @@ extern int DEF_NDP;
 extern int DEF_IGMP;
 extern int DEF_MLD;
 extern int DEF_N;
+extern int DEF_FILTERS;
 
 #endif

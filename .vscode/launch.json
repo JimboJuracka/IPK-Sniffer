@@ -8,7 +8,7 @@
             "program": "${fileDirname}/${fileBasenameNoExtension}",
             "args": [
                 "-i",
-                "eth0",
+                "lo",
                 "-p",
                 "23",
                 "--tcp",

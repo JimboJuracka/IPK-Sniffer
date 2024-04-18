@@ -49,7 +49,7 @@ char* HELP_MSG =
 ;
 
 int main(int argc, char** argv){
-    pcap_if_t *devs;
+    pcap_if_t *devs = NULL;
     int optc;
     char* endptr = NULL;
     errno = 0;
@@ -218,7 +218,7 @@ int main(int argc, char** argv){
         }
 
     }
-    if(get_devs(devs)){
+    if(get_devs(&devs)){
         exit(EXIT_FAILURE);
     }
     if(argc == 1 || (argc == 2 && DEF_INTERFACE == NULL && INTERFACE_USED_FLAG)){
@@ -238,13 +238,14 @@ int main(int argc, char** argv){
     }
     if(optind != argc){
         fprintf(stderr, "Unknown option '%s'\n", argv[optind]);
+        pcap_freealldevs(devs);
         exit(EXIT_FAILURE);
     }
+    pcap_freealldevs(devs);
 
-    // int packet_num;
-    // int link_head_size;
-    // pcap_t *handle;
-    // pcap_set_promisc(handle, 8);
+    int packet_num;
+    int link_head_size;
+    pcap_t *handle = get_handle(DEF_INTERFACE);
 
 
     return 0;
