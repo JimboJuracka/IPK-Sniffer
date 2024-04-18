@@ -1,19 +1,19 @@
 CC=gcc
-CFLAGS = -std=c99 -Wall -Wextra -pedantic
-CFLAGS_WERROR = -std=c99 -Wall -Wextra -Werror -pedantic
-CFLAGS_DEBUG = -std=c99 -Wall -Wextra -pedantic -DDEBUG
-CFLAGS_VERBOSE = -std=c99 -Wall -Wextra -pedantic -DVERBOSE
-CFLAGS_RAW =
+CFLAGS = -Wall -Wextra -pedantic -lpcap
+CFLAGS_WERROR = -Wall -Wextra -Werror -pedantic -lpcap
+CFLAGS_DEBUG = -Wall -Wextra -pedantic -DDEBUG -lpcap
+CFLAGS_VERBOSE = -Wall -Wextra -pedantic -DVERBOSE -lpcap
+CFLAGS_RAW = -lpcap
 
 EXECUTABLE=./ipk-sniffer
 
 default:
-	$(CC) $(CFLAGS) -o $(EXECUTABLE) ./src/*.c
+	$(CC) ./src/*.c -o $(EXECUTABLE) $(CFLAGS)
 
 debug:
-	$(CC) $(CFLAGS_DEBUG) -o $(EXECUTABLE) ./src/*.c
+	$(CC) ./src/*.c -o $(EXECUTABLE) $(CFLAGS_DEBUG)
 
 raw:
-	$(CC) $(CFLAGS_RAW) -o $(EXECUTABLE) ./src/*.c
+	$(CC) ./src/*.c -o $(EXECUTABLE) $(CFLAGS_RAW)
 
 clean:
