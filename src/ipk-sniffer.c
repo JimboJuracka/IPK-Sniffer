@@ -5,6 +5,12 @@
 #include <stdlib.h>
 #include <errno.h>
 
+#include <pcap/pcap.h>
+#include <netinet/tcp.h>
+#include <netinet/udp.h>
+#include <netinet/ip_icmp.h>
+
+#include "packet.h"
 #include "ipk-sniffer.h"
 
 char* DEF_INTERFACE = NULL;
@@ -43,8 +49,10 @@ char* HELP_MSG =
 ;
 
 int main(int argc, char** argv){
+    pcap_if_t *devs;
     int optc;
     char* endptr = NULL;
+    errno = 0;
     static struct option arg_options[] = {
         {"interface",           required_argument,  0, 'i'},
         {"tcp",                 no_argument,        0, 't'},
@@ -210,19 +218,34 @@ int main(int argc, char** argv){
         }
 
     }
-    if(optind != argc){
-        fprintf(stderr, "Unknown option '%s'\n", argv[optind]);
+    if(get_devs(devs)){
         exit(EXIT_FAILURE);
     }
     if(argc == 1 || (argc == 2 && DEF_INTERFACE == NULL && INTERFACE_USED_FLAG)){
-        //print list of active interfaces
-        printf("*printing list of interfaces\n");
+        print_interfaces(devs);
+        pcap_freealldevs(devs);
         exit(EXIT_SUCCESS);
     }
     if(DEF_INTERFACE == NULL){
         fprintf(stderr, "Interface not specified. Use '-i interface' or '--interface interface'\n");
+        pcap_freealldevs(devs);
         exit(EXIT_FAILURE);
     }
+    if(check_interface(DEF_INTERFACE, devs)){
+        fprintf(stderr, "Interface '%s' not found\n", DEF_INTERFACE);
+        pcap_freealldevs(devs);
+        exit(EXIT_FAILURE);
+    }
+    if(optind != argc){
+        fprintf(stderr, "Unknown option '%s'\n", argv[optind]);
+        exit(EXIT_FAILURE);
+    }
+
+    // int packet_num;
+    // int link_head_size;
+    // pcap_t *handle;
+    // pcap_set_promisc(handle, 8);
+
 
     return 0;
 }
