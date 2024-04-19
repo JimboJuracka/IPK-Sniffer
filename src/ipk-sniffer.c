@@ -243,8 +243,8 @@ int main(int argc, char** argv){
     }
     pcap_freealldevs(devs);
 
-    int packet_num;
-    int link_head_size;
+    // int packet_num;
+    // int link_head_size;
     pcap_t *handle = get_handle(DEF_INTERFACE);
 
 

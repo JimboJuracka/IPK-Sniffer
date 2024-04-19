@@ -59,11 +59,12 @@ pcap_t* get_handle(char* dev){
     }
 
     if(DEF_FILTERS){
+        //snprintf(filter_string, sizeof(filter_string), "ether");
         if(DEF_TCP){
-            strcat(filter_string, " && tcp");
+            strcat(filter_string, " or tcp");
         }
         if(DEF_UDP){
-            strcat(filter_string, " && udp");
+            strcat(filter_string, " or udp");
         }
         if(DEF_DST_PORT != -1){
             snprintf(filter_string + strlen(filter_string), sizeof(filter_string) - strlen(filter_string), " && dst port %d", DEF_DST_PORT);
@@ -72,23 +73,26 @@ pcap_t* get_handle(char* dev){
             snprintf(filter_string + strlen(filter_string), sizeof(filter_string) - strlen(filter_string), " && src port %d", DEF_DST_PORT);
         }
         if(DEF_ICPM4){
-            strcat(filter_string, " && icpm");
+            strcat(filter_string, " or icpm");
         }
         if(DEF_ICPM6){
-            strcat(filter_string, " && icmp6");
+            strcat(filter_string, " or icmp6");
         }
         if(DEF_ARP){
-            strcat(filter_string, " && arp");
+            strcat(filter_string, " or arp");
         }
         if(DEF_NDP){
-            strcat(filter_string, " && (icmp6 && ip6[40] == 135)");
+            strcat(filter_string, " or (icmp6 && ip6[40] == 135)");
         }
         if(DEF_IGMP){
-            strcat(filter_string, " && igmp");
+            strcat(filter_string, " or igmp");
         }
         if(DEF_MLD){
-            strcat(filter_string,  "&& (icmp6 && ip6[40] == 131 || icmp6 && ip6[40] == 143)");
+            strcat(filter_string,  " or (icmp6 && ip6[40] == 131 || icmp6 && ip6[40] == 143)");
         }
+        #ifdef DEBUG
+        printf("filter_string: %s\n", filter_string);
+        #endif
     }
 
 
