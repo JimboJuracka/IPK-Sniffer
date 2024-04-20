@@ -6,17 +6,19 @@
 #include <errno.h>
 
 #include <pcap/pcap.h>
-#include <netinet/tcp.h>
-#include <netinet/udp.h>
-#include <netinet/ip_icmp.h>
 
-#include "packet.h"
 #include "ipk-sniffer.h"
+#include "packet.h"
+
+int packet_num;
+int link_head_size;
+pcap_t *handle = NULL;
 
 char* DEF_INTERFACE = NULL;
 int INTERFACE_USED_FLAG = 0;
 int DEF_TCP = 0;
 int DEF_UDP = 0;
+int DEF_ANY_PORT = -1;
 int DEF_DST_PORT = -1;
 int DEF_SRC_PORT = -1;
 int DEF_ICPM4 = 0;
@@ -76,6 +78,9 @@ int main(int argc, char** argv){
             
             case 'i':
                 //TODO: validate interface or exit with error
+                if(DEF_INTERFACE != NULL){
+
+                }
                 DEF_INTERFACE = optarg;
                 INTERFACE_USED_FLAG = 1;
                 #ifdef DEBUG
@@ -100,6 +105,11 @@ int main(int argc, char** argv){
                 continue;
 
             case 'p':
+                if(DEF_DST_PORT >= 0 || DEF_SRC_PORT >= 0){
+                    fprintf(stderr, "Excessive port arguments\n");
+                    exit(EXIT_FAILURE);
+                }
+                DEF_ANY_PORT = strtol(optarg, &endptr, 0);
                 DEF_DST_PORT = strtol(optarg, &endptr, 0);
                 DEF_SRC_PORT = strtol(optarg, &endptr, 0);
                 if(DEF_DST_PORT < 0 || DEF_SRC_PORT < 0 || errno != 0 || !(endptr == NULL ||  *endptr == '\0')){
@@ -112,6 +122,10 @@ int main(int argc, char** argv){
                 continue;
 
             case 'd':
+                if(DEF_ANY_PORT >= 0){
+                    fprintf(stderr, "Excessive port arguments\n");
+                    exit(EXIT_FAILURE);
+                }
                 DEF_DST_PORT = strtol(optarg, &endptr, 0);
                 if(DEF_DST_PORT < 0 || errno != 0 || !(endptr == NULL ||  *endptr == '\0')){
                     fprintf(stderr, "Invalid argument '%s' for option '%c'\n", optarg, optc);
@@ -123,6 +137,10 @@ int main(int argc, char** argv){
                 continue;
 
             case 's':
+                if(DEF_ANY_PORT >= 0){
+                    fprintf(stderr, "Excessive port arguments\n");
+                    exit(EXIT_FAILURE);
+                }
                 DEF_SRC_PORT = strtol(optarg, &endptr, 0);
                 if(DEF_SRC_PORT < 0 || errno != 0 || !(endptr == NULL ||  *endptr == '\0')){
                     fprintf(stderr, "Invalid argument '%s' for option '%c'\n", optarg, optc);
@@ -183,7 +201,7 @@ int main(int argc, char** argv){
 
             case 'n':
                 DEF_N = strtol(optarg, &endptr, 0);
-                if(DEF_N < 0 || errno != 0 || !(endptr == NULL ||  *endptr == '\0')){
+                if(errno != 0 || !(endptr == NULL ||  *endptr == '\0')){
                     fprintf(stderr, "Invalid argument '%s' for option '%c'\n", optarg, optc);
                     exit(EXIT_FAILURE);
                 }
@@ -243,10 +261,26 @@ int main(int argc, char** argv){
     }
     pcap_freealldevs(devs);
 
-    // int packet_num;
-    // int link_head_size;
-    pcap_t *handle = get_handle(DEF_INTERFACE);
 
 
-    return 0;
+    handle = get_handle(DEF_INTERFACE);
+    if(handle == NULL){
+        exit(EXIT_FAILURE);
+    }
+
+    link_head_size = get_link_head_size(handle);
+    if(link_head_size == 0){
+        exit(EXIT_FAILURE);
+    }
+    #ifdef DEBUG
+    printf("INFO: link_head_size = %d\n", link_head_size);
+    #endif
+
+    if(pcap_loop(handle, DEF_N, handle_packet, NULL) < 0){
+        fprintf(stderr, "ERROR: pcap_loop: %s", pcap_geterr(handle));
+        exit(EXIT_FAILURE);
+    }
+
+
+    exit(EXIT_SUCCESS);
 }
