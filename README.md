@@ -1,2 +1,2 @@
 # IPK-Sniffer
-Goal of this project is to design and implement a network analyzer that will be able to capture and filter packets on a specific network interface
+Cílem projektu je implementovat sniffer, schopný monitorovat a filtrovat pakety na konkrétním síťovém zařízení, a získat za tuto implementaci 10 bodů.
