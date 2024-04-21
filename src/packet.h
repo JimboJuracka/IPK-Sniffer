@@ -13,4 +13,6 @@ void print_data(const unsigned char* data_ptr, int byte_offset, int size);
 
 void handle_packet(unsigned char* user, const struct pcap_pkthdr* packet_head, const unsigned char* ptr);
 
+void stop_capture();
+
 #endif

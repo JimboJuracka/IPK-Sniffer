@@ -4,14 +4,13 @@
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <signal.h>
 
 #include <pcap/pcap.h>
 
 #include "ipk-sniffer.h"
 #include "packet.h"
 
-int packet_num;
-int link_head_size;
 pcap_t *handle = NULL;
 
 char* DEF_INTERFACE = NULL;
@@ -51,10 +50,16 @@ char* HELP_MSG =
 ;
 
 int main(int argc, char** argv){
-    pcap_if_t *devs = NULL;
-    int optc;
+
+    /*************************************************************
+    *                      ARGUMENT PARSING
+    ************************************************************/
+
+    pcap_if_t *devs = NULL;     // interface list structure
+    int optc;                   // option character
     char* endptr = NULL;
-    errno = 0;
+    errno = 0;                  // error number
+    // long options structure
     static struct option arg_options[] = {
         {"interface",           required_argument,  0, 'i'},
         {"tcp",                 no_argument,        0, 't'},
@@ -77,14 +82,14 @@ int main(int argc, char** argv){
                 break;
             
             case 'i':
-                //TODO: validate interface or exit with error
                 if(DEF_INTERFACE != NULL){
-
+                    fprintf(stderr, "Excessive interface arguments '%s'\n", optarg);
+                    exit(EXIT_FAILURE);
                 }
                 DEF_INTERFACE = optarg;
                 INTERFACE_USED_FLAG = 1;
                 #ifdef DEBUG
-                printf("option i with value '%s'\n", optarg);
+                printf("INFO: option i with value '%s'\n", optarg);
                 #endif
                 continue;
 
@@ -92,7 +97,7 @@ int main(int argc, char** argv){
                 DEF_TCP = 1;
                 DEF_FILTERS = 1;
                 #ifdef DEBUG
-                printf("option t\n");
+                printf("INFO: option t\n");
                 #endif
                 continue;
 
@@ -100,7 +105,7 @@ int main(int argc, char** argv){
                 DEF_UDP = 1;
                 DEF_FILTERS = 1;
                 #ifdef DEBUG
-                printf("option u\n");
+                printf("INFO: option u\n");
                 #endif
                 continue;
 
@@ -115,7 +120,7 @@ int main(int argc, char** argv){
                     exit(EXIT_FAILURE);
                 }
                 #ifdef DEBUG
-                printf("option p with value '%s'\n", optarg);
+                printf("INFO: option p with value '%s'\n", optarg);
                 #endif
                 continue;
 
@@ -130,7 +135,7 @@ int main(int argc, char** argv){
                     exit(EXIT_FAILURE);
                 }
                 #ifdef DEBUG
-                printf("option d with value '%s'\n", optarg);
+                printf("INFo: option d with value '%s'\n", optarg);
                 #endif
                 continue;
 
@@ -145,7 +150,7 @@ int main(int argc, char** argv){
                     exit(EXIT_FAILURE);
                 }
                 #ifdef DEBUG
-                printf("option s with value '%s'\n", optarg);
+                printf("INFO: option s with value '%s'\n", optarg);
                 #endif
                 continue;
 
@@ -153,7 +158,7 @@ int main(int argc, char** argv){
                 DEF_ICPM4 = 1;
                 DEF_FILTERS = 1;
                 #ifdef DEBUG
-                printf("option 4\n");
+                printf("INFO: option 4\n");
                 #endif
                 continue;
 
@@ -161,7 +166,7 @@ int main(int argc, char** argv){
                 DEF_ICPM6 = 1;
                 DEF_FILTERS = 1;
                 #ifdef DEBUG
-                printf("option 6\n");
+                printf("INFO: option 6\n");
                 #endif
                 continue;
 
@@ -169,7 +174,7 @@ int main(int argc, char** argv){
                 DEF_ARP = 1;
                 DEF_FILTERS = 1;
                 #ifdef DEBUG
-                printf("option a\n");
+                printf("INFO: option a\n");
                 #endif
                 continue;
 
@@ -177,7 +182,7 @@ int main(int argc, char** argv){
                 DEF_NDP = 1;
                 DEF_FILTERS = 1;
                 #ifdef DEBUG
-                printf("option N\n");
+                printf("INFO: option N\n");
                 #endif
                 continue;
 
@@ -185,7 +190,7 @@ int main(int argc, char** argv){
                 DEF_IGMP = 1;
                 DEF_FILTERS = 1;
                 #ifdef DEBUG
-                printf("option g\n");
+                printf("INFO: option g\n");
                 #endif
                 continue;
 
@@ -193,7 +198,7 @@ int main(int argc, char** argv){
                 DEF_MLD = 1;
                 DEF_FILTERS = 1;
                 #ifdef DEBUG
-                printf("option m\n");
+                printf("INFO: option m\n");
                 #endif
                 continue;
 
@@ -204,7 +209,7 @@ int main(int argc, char** argv){
                     exit(EXIT_FAILURE);
                 }
                 #ifdef DEBUG
-                printf("option n with value '%s'\n", optarg);
+                printf("INFO: option n with value '%s'\n", optarg);
                 #endif
                 continue;
 
@@ -216,7 +221,7 @@ int main(int argc, char** argv){
                 if(optopt == 'i'){
                     INTERFACE_USED_FLAG = 1;
                     #ifdef DEBUG
-                    printf("option i without value\n");
+                    printf("INFO: option i without value\n");
                     #endif
                 }else{
                     fprintf(stderr, "Option '%c' requires an argument\n", optopt);
@@ -237,21 +242,26 @@ int main(int argc, char** argv){
     if(get_devs(&devs)){
         exit(EXIT_FAILURE);
     }
+
+    /* Print avilable interfaces if there are no arguments or interface is not specified */
     if(argc == 1 || (argc == 2 && DEF_INTERFACE == NULL && INTERFACE_USED_FLAG)){
         print_interfaces(devs);
         pcap_freealldevs(devs);
         exit(EXIT_SUCCESS);
     }
+    /* If interface is still not specified, exit */
     if(DEF_INTERFACE == NULL){
         fprintf(stderr, "Interface not specified. Use '-i interface' or '--interface interface'\n");
         pcap_freealldevs(devs);
         exit(EXIT_FAILURE);
     }
+    /* Check if interface can be accessed */
     if(check_interface(DEF_INTERFACE, devs)){
         fprintf(stderr, "Interface '%s' not found\n", DEF_INTERFACE);
         pcap_freealldevs(devs);
         exit(EXIT_FAILURE);
     }
+    /* Check number of arguments */
     if(optind != argc){
         fprintf(stderr, "Unknown option '%s'\n", argv[optind]);
         pcap_freealldevs(devs);
@@ -260,19 +270,31 @@ int main(int argc, char** argv){
     pcap_freealldevs(devs);
 
 
+    /*************************************************************
+    *                       PACKET CAPTURE
+    ************************************************************/
 
+    // Set handle function to signals
+    signal(SIGINT, stop_capture);
+    signal(SIGTERM, stop_capture);
+    signal(SIGQUIT, stop_capture);
+
+    // pcap_t handle initialization
     handle = get_handle(DEF_INTERFACE);
     if(handle == NULL){
         exit(EXIT_FAILURE);
     }
 
+    // Capture loop
     if(pcap_loop(handle, DEF_N, handle_packet, NULL) < 0){
         fprintf(stderr, "ERROR: pcap_loop: %s", pcap_geterr(handle));
         exit(EXIT_FAILURE);
     }
 
+    // Close pcap_t handle
+    pcap_close(handle);
     #ifdef DEBUG
-    printf("ende\n");
+    printf("INFO: end of program\n");
     #endif
     exit(EXIT_SUCCESS);
 }

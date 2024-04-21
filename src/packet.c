@@ -9,8 +9,6 @@
 #include <netinet/udp.h>
 #include <netinet/ip_icmp.h>
 #include <netinet/igmp.h>
-//#include <netinet/ether.h>
-//#include <netinet/if_ether.h>
 #include <arpa/inet.h>
 #include <linux/if_arp.h>
 #include <time.h>
@@ -18,7 +16,7 @@
 #include "ipk-sniffer.h"
 #include "packet.h"
 
-
+/* Function to print avilable interfaces */
 int get_devs(pcap_if_t** devsk){
     char errstring[PCAP_ERRBUF_SIZE];
     if(pcap_findalldevs(devsk, errstring) == PCAP_ERROR){
@@ -32,6 +30,7 @@ int get_devs(pcap_if_t** devsk){
     return 0;
 }
 
+/* Function to print avilable interfaces */
 void print_interfaces(pcap_if_t *interfaces){
     pcap_if_t *temp = interfaces;
     while(temp != NULL){
@@ -40,6 +39,7 @@ void print_interfaces(pcap_if_t *interfaces){
     }
 }
 
+/* Function to check if the user given interface can be used */
 int check_interface(char* inface, pcap_if_t *interfaces){
     pcap_if_t *temp = interfaces;
     while(temp != NULL){
@@ -51,26 +51,30 @@ int check_interface(char* inface, pcap_if_t *interfaces){
     return 1;
 }
 
+/**/
 pcap_t* get_handle(char* dev){
-    char errstring[PCAP_ERRBUF_SIZE];
-    bpf_u_int32 mask;
+    char errstring[PCAP_ERRBUF_SIZE];   // string for error messages
+    bpf_u_int32 mask;             
     bpf_u_int32 ip;
     pcap_t* handle;
-    struct bpf_program filter;
-    char filter_string[200];
+    struct bpf_program filter;          // filter structure
+    char filter_string[200];            // buffer to store filter string
     memset(filter_string, 0, 200);
 
+    /* Gets network address and network mask for a capture device */
     if(pcap_lookupnet(dev, &ip, &mask, errstring) == PCAP_ERROR){
         fprintf(stderr, "ERROR: pcap_lookupnet(): %s\n", errstring);
         return NULL;
     }
 
+    /* Initialization of the handle for a live capture*/
     handle = pcap_open_live(dev, BUFSIZ, 1, 1000, errstring);
     if(handle == NULL){
         fprintf(stderr, "ERROR: pcap_open_live(): %s\n", errstring);
         return NULL;
     }
 
+    /* Construction of filter string */
     if(DEF_FILTERS){
         if(DEF_TCP || DEF_UDP){
             sprintf(filter_string, "(");
@@ -124,21 +128,29 @@ pcap_t* get_handle(char* dev){
             strcat(filter_string,  "(icmp6 && ip6[40] == 131 || icmp6 && ip6[40] == 132 || icmp6 && ip6[40] == 143)");
         }
     }
-
     #ifdef DEBUG
     printf("INFO: filter_string: %s\n", filter_string);
     #endif
+
+    /* Compilation of the bpf structure with the filter string */
     if(pcap_compile(handle, &filter, filter_string, 0, mask) == PCAP_ERROR){
         fprintf(stderr, "ERROR: pcap_compile(): %s\n", pcap_geterr(handle));
         return NULL;
     }
+
+    /* Set the filter for handle */
     if(pcap_setfilter(handle, &filter) == PCAP_ERROR) {
+        pcap_freecode(&filter);
         fprintf(stderr, "ERROR: pcap_setfilter(): %s\n", pcap_geterr(handle));
         return NULL;
     }
+
+    /* Free the bpf structure */
+    pcap_freecode(&filter);
     return handle;
 }
 
+/* Function to print packet frames in hexadecimal fomat*/
 void print_data(const unsigned char* data_ptr, int byte_offset, int size){
     unsigned char c;
     int pn = size / byte_offset;
@@ -151,13 +163,17 @@ void print_data(const unsigned char* data_ptr, int byte_offset, int size){
             if((i+1)*byte_offset > size){
                 tn = size - i*byte_offset;
             }
+            // byte_offset (0x0000:)
             fprintf(stdout, "0x%04x: ", i*byte_offset);
+
+            // byte_offset_hexa (i.e. 05 a0 52 5b 40 00 36 06 5b db d9 43 16 8c 93 e5)
             for(int j = 0; j < tn; j++){
                 fprintf(stdout, "%02x ", (unsigned char)data_ptr[i*byte_offset+j]);
                 if(j == byte_offset/2 - 1){
                     fprintf(stdout, " ");
                 }
             }
+            // padding (if necesarry)
             if(tn != byte_offset){
                 for(int g = 0; g < byte_offset - tn; g++){
                     fprintf(stdout, "   ");
@@ -167,6 +183,8 @@ void print_data(const unsigned char* data_ptr, int byte_offset, int size){
                 }
             }
             fprintf(stdout, " ");
+
+            // byte_offset_ASCII (i.e. ........ ..4 ..)
             for(int k = 0; k < tn; k++){
                 c = data_ptr[i*byte_offset + k];
                 if(c < 32 || c > 127){c = '.';}
@@ -180,52 +198,67 @@ void print_data(const unsigned char* data_ptr, int byte_offset, int size){
     }
 }
 
+/* Function to handle the printing of packet information */
 void handle_packet(unsigned char* user, const struct pcap_pkthdr* packet_head, const unsigned char* ptr){
     user++;
-    const unsigned char* packet_ptr = ptr;
-    struct tm* ts = localtime(&packet_head->ts.tv_sec);
-    char timestamp[256];
-    int frame_length = packet_head->len;
-    //link layer
-    int linktype;
-    uint16_t eth_type;
-    // internet layer
-    struct iphdr* ip_hdr;
-    struct ip6_hdr* ip6_hdr;
-    struct arphdr* arp_hdr;
-    char dstip[256];
-    char srcip[256];
-    uint8_t proto_type;
-    //transport layer
-    struct igmp* igmp_hdr;
-    struct icmphdr* icmp_hdr;
-    struct tcphdr* tcp_hdr;
-    struct udphdr* udp_hdr;
+    const unsigned char* packet_ptr = ptr;  // pointer to the start of each header, adjusted with each layer
+    struct tm* ts;                          // time structure
+    char timestamp[256];                    // timestamp string
+    int frame_length = packet_head->len;    // length of frame
 
-    //reading time hurts
+    //link layer
+    int linktype;               // type of link layer
+    uint16_t eth_type;          // type of internet layer
+
+    // internet layer
+    struct iphdr* ip_hdr;       // IPv4 header
+    struct ip6_hdr* ip6_hdr;    // IPv6 header
+    struct arphdr* arp_hdr;     // ARP header
+    char dstip[256];            // Destination address string
+    char srcip[256];            // Source address string
+    uint8_t proto_type;         // type of transport layer
+
+    //transport layer
+    struct igmp* igmp_hdr;      // IGMP header
+    struct icmphdr* icmp_hdr;   // ICMP header
+    struct tcphdr* tcp_hdr;     // TCP header
+    struct udphdr* udp_hdr;     // UDP header
+
+    /*
+    Timestamp is obtained from pcap_pkthdr structure in second, then converted into string.
+    The number of microseconds and timezone is appended.
+    */
+    ts = localtime(&packet_head->ts.tv_sec);
     strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%S", ts);
     sprintf(timestamp+strlen(timestamp), ".%06d", (int)packet_head->ts.tv_usec);
     strftime(timestamp+strlen(timestamp), sizeof(timestamp), "%z", ts);
     fprintf(stdout, "timestamp: %s\n", timestamp);
 
-    //link layer
+
+    /*              DATA LINK LAYER             */
+
+    // Obtaining the type of data link layer
     if((linktype = pcap_datalink(handle)) == PCAP_ERROR) {
         fprintf(stderr, "ERROR: pcap_datalink(): %s\n", pcap_geterr(handle));
         return;
     }
     switch (linktype){
-        case DLT_LINUX_SLL:
+        case DLT_LINUX_SLL:     // Linux cooked
             packet_ptr += 16;
+            #ifdef DEBUG
             fprintf(stdout, "Linux cooked:\n");
+            #endif
             fprintf(stdout, "src MAC: %02x:%02x:%02x:%02x:%02x:%02x\n", ptr[6], ptr[7], ptr[8], ptr[9], ptr[10], ptr[11]);
             fprintf(stdout, "frame length: %d bytes\n", frame_length);
             memcpy(&eth_type, &(ptr[14]), 2);
             eth_type = ntohs(eth_type);
             break;
 
-        case DLT_EN10MB:
+        case DLT_EN10MB:        // Ethernet
             packet_ptr += 14;
+            #ifdef DEBUG
             fprintf(stdout, "Ethernet:\n");
+            #endif
             fprintf(stdout, "src MAC: %02x:%02x:%02x:%02x:%02x:%02x\n", ptr[6], ptr[7], ptr[8], ptr[9], ptr[10], ptr[11]);
             fprintf(stdout, "dst MAC: %02x:%02x:%02x:%02x:%02x:%02x\n", ptr[0], ptr[1], ptr[2], ptr[3], ptr[4], ptr[5]);
             fprintf(stdout, "frame length: %d bytes\n", frame_length);
@@ -234,19 +267,22 @@ void handle_packet(unsigned char* user, const struct pcap_pkthdr* packet_head, c
             break;
     
         default:
+            fprintf(stdout, "Unsupported link layer protocol\n");
             fprintf(stdout, "frame length: %d bytes\n", frame_length);
-            printf("Unsupported link layer protocol\n");
             goto print_the_packet;
     }
 
 
-    //internet layer
+    /*          INTERNET LAYER          */
+    
     switch(eth_type){
         case 0x0800:    //IPv4
             ip_hdr = (struct iphdr*)packet_ptr;
             packet_ptr += (uint16_t)(ip_hdr->ihl * 4);
             proto_type = ip_hdr->protocol;
+            #ifdef DEBUG
             fprintf(stdout, "IPv4:\n");
+            #endif
             strcpy(srcip, inet_ntoa(*(struct in_addr *)&(ip_hdr->saddr)));
             strcpy(dstip, inet_ntoa(*(struct in_addr *)&(ip_hdr->daddr)));
             fprintf(stdout, "src IP: %s\n", srcip);
@@ -257,7 +293,9 @@ void handle_packet(unsigned char* user, const struct pcap_pkthdr* packet_head, c
             ip6_hdr = (struct ip6_hdr*)packet_ptr;
             packet_ptr += 40;
             proto_type = ip6_hdr->ip6_ctlun.ip6_un1.ip6_un1_nxt;
+            #ifdef DEBUG
             fprintf(stdout, "IPv6:\n");
+            #endif
             inet_ntop(AF_INET6, &(ip6_hdr->ip6_src), srcip, INET6_ADDRSTRLEN);
             inet_ntop(AF_INET6, &(ip6_hdr->ip6_dst), dstip, INET6_ADDRSTRLEN);
             fprintf(stdout, "src IP: %s\n", srcip);
@@ -265,10 +303,12 @@ void handle_packet(unsigned char* user, const struct pcap_pkthdr* packet_head, c
             break;
 
         case 0x0806:    //ARP
-            fprintf(stdout, "ARP:\n");
             arp_hdr = (struct arphdr*)packet_ptr;
             strcpy(srcip, inet_ntoa(*(struct in_addr *)&(packet_ptr[14])));
             strcpy(dstip, inet_ntoa(*(struct in_addr *)&(packet_ptr[24])));
+            #ifdef DEBUG
+            fprintf(stdout, "ARP:\n");
+            #endif
             fprintf(stdout, "Hardware Type: %d\n", ntohs(arp_hdr->ar_hrd));
             fprintf(stdout, "Protocol Type: %02x\n", (uint16_t)ntohs(arp_hdr->ar_pro));
             fprintf(stdout, "ARP opcode (command): %d\n", ntohs(arp_hdr->ar_op));
@@ -283,39 +323,51 @@ void handle_packet(unsigned char* user, const struct pcap_pkthdr* packet_head, c
             fprintf(stdout, "Unsuported internet protocol\n");
     }
 
-    //transport layer
+
+    /*          TRANSPORT LAYER         */
+    
     switch(proto_type){
-        case IPPROTO_TCP:
+        case IPPROTO_TCP:       // TCP
             tcp_hdr = (struct tcphdr*)packet_ptr;
+            #ifdef DEBUG
             fprintf(stdout, "TCP:\n");
+            #endif
             fprintf(stdout, "src port %d\n",  ntohs(tcp_hdr->th_sport));
             fprintf(stdout, "dst port: %d\n", ntohs(tcp_hdr->th_dport));
             break;
 
-        case IPPROTO_UDP:
-            fprintf(stdout, "UDP:\n");
+        case IPPROTO_UDP:       // UDP
             udp_hdr = (struct udphdr*)packet_ptr;
+            #ifdef DEBUG
+            fprintf(stdout, "UDP:\n");
+            #endif
             fprintf(stdout, "src port %d\n", ntohs(udp_hdr->uh_sport));
             fprintf(stdout, "dst port: %d\n", ntohs(udp_hdr->uh_dport));
             break;
 
-        case IPPROTO_ICMP:
-            fprintf(stdout, "ICMP:\n");
+        case IPPROTO_ICMP:      // ICMPv4
             icmp_hdr = (struct icmphdr*)(packet_ptr);
+            #ifdef DEBUG
+            fprintf(stdout, "ICMPv4:\n");
+            #endif
             fprintf(stdout, "Type: %d\n", (uint8_t)icmp_hdr->type);
             fprintf(stdout, "Code: %d\n", (uint8_t)icmp_hdr->code);
             break;
 
-        case IPPROTO_ICMPV6:
+        case IPPROTO_ICMPV6:    // ICMPv6
+            icmp_hdr = (struct icmphdr*)(packet_ptr);
+            #ifdef DEBUG
             fprintf(stdout, "ICMPv6:\n");
-            icmp_hdr = (struct icmphdr*)(packet_ptr);
+            #endif
             fprintf(stdout, "Type: %d\n", (uint8_t)icmp_hdr->type);
             fprintf(stdout, "Code: %d\n", (uint8_t)icmp_hdr->code);
             break;
 
-        case IPPROTO_IGMP:
-            fprintf(stdout, "IGMP:\n");
+        case IPPROTO_IGMP:      // IGMP
             igmp_hdr = (struct igmp*)packet_ptr;
+            #ifdef DEBUG
+            fprintf(stdout, "IGMP:\n");
+            #endif
             fprintf(stdout, "Type: %d\n", igmp_hdr->igmp_type);
             fprintf(stdout, "Code: %d\n", igmp_hdr->igmp_code);
             fprintf(stdout, "Group address: %s\n", inet_ntoa(igmp_hdr->igmp_group));
@@ -325,9 +377,15 @@ void handle_packet(unsigned char* user, const struct pcap_pkthdr* packet_head, c
             fprintf(stdout, "Unsuported transport layer protocol\n");
     }
 
+    // Printing of the frame in format:  byte_offset: byte_offset_hexa byte_offset_ASCII
     print_the_packet:
     fprintf(stdout, "\n");
     print_data(ptr, 16, packet_head->caplen);
-    //dont_print_packet:
     fprintf(stdout, "\n");
+}
+
+/*Function to handle SIGINT signal*/
+void stop_capture(){
+    pcap_close(handle);
+    exit(EXIT_SUCCESS);
 }
