@@ -9,8 +9,8 @@ int check_interface(char* inface, pcap_if_t *interfaces);
 
 pcap_t* get_handle(char* dev);
 
-int get_link_head_size(pcap_t* handle);
+void print_data(const unsigned char* data_ptr, int byte_offset, int size);
 
-void handle_packet(unsigned char* user, const struct pcap_pkthdr* packet_head, const unsigned char* packet_ptr);
+void handle_packet(unsigned char* user, const struct pcap_pkthdr* packet_head, const unsigned char* ptr);
 
 #endif

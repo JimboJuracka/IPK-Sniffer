@@ -1,7 +1,7 @@
 CC=gcc
 CFLAGS = -Wall -Wextra -pedantic -lpcap
 CFLAGS_WERROR = -Wall -Wextra -Werror -pedantic -lpcap
-CFLAGS_DEBUG = -Wall -Wextra -pedantic -DDEBUG -lpcap
+CFLAGS_DEBUG = -DDEBUG -lpcap
 CFLAGS_VERBOSE = -Wall -Wextra -pedantic -DVERBOSE -lpcap
 CFLAGS_RAW = -lpcap
 

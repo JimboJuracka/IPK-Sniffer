@@ -110,9 +110,7 @@ int main(int argc, char** argv){
                     exit(EXIT_FAILURE);
                 }
                 DEF_ANY_PORT = strtol(optarg, &endptr, 0);
-                DEF_DST_PORT = strtol(optarg, &endptr, 0);
-                DEF_SRC_PORT = strtol(optarg, &endptr, 0);
-                if(DEF_DST_PORT < 0 || DEF_SRC_PORT < 0 || errno != 0 || !(endptr == NULL ||  *endptr == '\0')){
+                if(DEF_ANY_PORT < 0 || errno != 0 || !(endptr == NULL ||  *endptr == '\0')){
                     fprintf(stderr, "Invalid argument '%s' for option '%c'\n", optarg, optc);
                     exit(EXIT_FAILURE);
                 }
@@ -268,19 +266,13 @@ int main(int argc, char** argv){
         exit(EXIT_FAILURE);
     }
 
-    link_head_size = get_link_head_size(handle);
-    if(link_head_size == 0){
-        exit(EXIT_FAILURE);
-    }
-    #ifdef DEBUG
-    printf("INFO: link_head_size = %d\n", link_head_size);
-    #endif
-
     if(pcap_loop(handle, DEF_N, handle_packet, NULL) < 0){
         fprintf(stderr, "ERROR: pcap_loop: %s", pcap_geterr(handle));
         exit(EXIT_FAILURE);
     }
 
-
+    #ifdef DEBUG
+    printf("ende\n");
+    #endif
     exit(EXIT_SUCCESS);
 }
