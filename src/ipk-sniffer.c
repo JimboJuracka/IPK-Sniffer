@@ -52,8 +52,8 @@ char* HELP_MSG =
 int main(int argc, char** argv){
 
     /*************************************************************
-    *                      ARGUMENT PARSING
-    ************************************************************/
+    *                      ARGUMENT PARSING                      *
+    *************************************************************/
 
     pcap_if_t *devs = NULL;     // interface list structure
     int optc;                   // option character
@@ -267,12 +267,13 @@ int main(int argc, char** argv){
         pcap_freealldevs(devs);
         exit(EXIT_FAILURE);
     }
+    /*free pcap_if_t structure*/
     pcap_freealldevs(devs);
 
 
     /*************************************************************
-    *                       PACKET CAPTURE
-    ************************************************************/
+    *                        PACKET CAPTURE                      *
+    *************************************************************/
 
     // Set handle function to signals
     signal(SIGINT, stop_capture);

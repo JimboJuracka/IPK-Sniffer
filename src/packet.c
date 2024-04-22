@@ -1,16 +1,17 @@
+#define __FAVOR_BSD
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <pcap/pcap.h>
+#include <arpa/inet.h>
+#include <linux/if_arp.h>
 #include <netinet/ip.h>
 #include <netinet/ip6.h>
 #include <netinet/tcp.h>
 #include <netinet/udp.h>
 #include <netinet/ip_icmp.h>
 #include <netinet/igmp.h>
-#include <arpa/inet.h>
-#include <linux/if_arp.h>
 #include <time.h>
 
 #include "ipk-sniffer.h"
@@ -109,7 +110,7 @@ pcap_t* get_handle(char* dev){
         }
         if(DEF_ICPM6){
             if(strlen(filter_string) != 0) strcat(filter_string, " or ");
-            strcat(filter_string, "icmp6");
+            strcat(filter_string, "(icmp6 && (ip6[40] == 128 || ip6[40] == 129))");
         }
         if(DEF_ARP){
             if(strlen(filter_string) != 0) strcat(filter_string, " or ");
@@ -163,12 +164,13 @@ void print_data(const unsigned char* data_ptr, int byte_offset, int size){
             if((i+1)*byte_offset > size){
                 tn = size - i*byte_offset;
             }
-            // byte_offset (0x0000:)
+            // byte_offset (i.e 0x0000:)
             fprintf(stdout, "0x%04x: ", i*byte_offset);
 
             // byte_offset_hexa (i.e. 05 a0 52 5b 40 00 36 06 5b db d9 43 16 8c 93 e5)
             for(int j = 0; j < tn; j++){
                 fprintf(stdout, "%02x ", (unsigned char)data_ptr[i*byte_offset+j]);
+                // wireshark-like space in the middle
                 if(j == byte_offset/2 - 1){
                     fprintf(stdout, " ");
                 }
@@ -184,11 +186,13 @@ void print_data(const unsigned char* data_ptr, int byte_offset, int size){
             }
             fprintf(stdout, " ");
 
-            // byte_offset_ASCII (i.e. ........ ..4 ..)
+            // byte_offset_ASCII (i.e. '.m.P..=. ..A...P.')
             for(int k = 0; k < tn; k++){
                 c = data_ptr[i*byte_offset + k];
+                // change unprintable characters to '.'
                 if(c < 32 || c > 127){c = '.';}
                 fprintf(stdout, "%c", c);
+                // wireshark-like space in the middle
                 if(k == byte_offset/2 - 1){
                     fprintf(stdout, " ");
                 }
@@ -235,7 +239,9 @@ void handle_packet(unsigned char* user, const struct pcap_pkthdr* packet_head, c
     fprintf(stdout, "timestamp: %s\n", timestamp);
 
 
-    /*              DATA LINK LAYER             */
+    /*************************************************************
+    *                      DATA LINK LAYER                       *
+    *************************************************************/
 
     // Obtaining the type of data link layer
     if((linktype = pcap_datalink(handle)) == PCAP_ERROR) {
@@ -273,7 +279,9 @@ void handle_packet(unsigned char* user, const struct pcap_pkthdr* packet_head, c
     }
 
 
-    /*          INTERNET LAYER          */
+    /*************************************************************
+    *                        NETWORK LAYER                       *
+    *************************************************************/
     
     switch(eth_type){
         case 0x0800:    //IPv4
@@ -312,19 +320,21 @@ void handle_packet(unsigned char* user, const struct pcap_pkthdr* packet_head, c
             fprintf(stdout, "Hardware Type: %d\n", ntohs(arp_hdr->ar_hrd));
             fprintf(stdout, "Protocol Type: %02x\n", (uint16_t)ntohs(arp_hdr->ar_pro));
             fprintf(stdout, "ARP opcode (command): %d\n", ntohs(arp_hdr->ar_op));
-            fprintf(stdout, "sender MAC %02x:%02x:%02x:%02x:%02x:%02x\n", packet_ptr[8], packet_ptr[9], packet_ptr[10], packet_ptr[11], packet_ptr[12], packet_ptr[13]);
+            //fprintf(stdout, "sender MAC %02x:%02x:%02x:%02x:%02x:%02x\n", packet_ptr[8], packet_ptr[9], packet_ptr[10], packet_ptr[11], packet_ptr[12], packet_ptr[13]);
             fprintf(stdout, "sender IP: %s\n", srcip);
-            fprintf(stdout, "target MAC %02x:%02x:%02x:%02x:%02x:%02x\n", packet_ptr[18], packet_ptr[19], packet_ptr[20], packet_ptr[21], packet_ptr[22], packet_ptr[23]);
+            //fprintf(stdout, "target MAC %02x:%02x:%02x:%02x:%02x:%02x\n", packet_ptr[18], packet_ptr[19], packet_ptr[20], packet_ptr[21], packet_ptr[22], packet_ptr[23]);
             fprintf(stdout, "target IP: %s\n", dstip);
             goto print_the_packet;
             break;
         
         default:
-            fprintf(stdout, "Unsuported internet protocol\n");
+            fprintf(stdout, "Unsupported network protocol\n");
     }
 
 
-    /*          TRANSPORT LAYER         */
+    /*************************************************************
+    *                       TRANSPORT LAYER                      *
+    *************************************************************/
     
     switch(proto_type){
         case IPPROTO_TCP:       // TCP
@@ -332,8 +342,8 @@ void handle_packet(unsigned char* user, const struct pcap_pkthdr* packet_head, c
             #ifdef DEBUG
             fprintf(stdout, "TCP:\n");
             #endif
-            fprintf(stdout, "src port %d\n",  ntohs(tcp_hdr->th_sport));
-            fprintf(stdout, "dst port: %d\n", ntohs(tcp_hdr->th_dport));
+            fprintf(stdout, "src port %d\n",  ntohs(tcp_hdr->source));
+            fprintf(stdout, "dst port: %d\n", ntohs(tcp_hdr->dest));
             break;
 
         case IPPROTO_UDP:       // UDP
@@ -341,8 +351,8 @@ void handle_packet(unsigned char* user, const struct pcap_pkthdr* packet_head, c
             #ifdef DEBUG
             fprintf(stdout, "UDP:\n");
             #endif
-            fprintf(stdout, "src port %d\n", ntohs(udp_hdr->uh_sport));
-            fprintf(stdout, "dst port: %d\n", ntohs(udp_hdr->uh_dport));
+            fprintf(stdout, "src port %d\n", ntohs(udp_hdr->source));
+            fprintf(stdout, "dst port: %d\n", ntohs(udp_hdr->dest));
             break;
 
         case IPPROTO_ICMP:      // ICMPv4
@@ -374,7 +384,7 @@ void handle_packet(unsigned char* user, const struct pcap_pkthdr* packet_head, c
             break;
 
         default:
-            fprintf(stdout, "Unsuported transport layer protocol\n");
+            fprintf(stdout, "Unsupported transport layer protocol\n");
     }
 
     // Printing of the frame in format:  byte_offset: byte_offset_hexa byte_offset_ASCII
